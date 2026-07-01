@@ -2005,25 +2005,64 @@
         }).join('') + '</select>';
     }
 
+    // Download the current rules as a .json file.
     function exportRules() {
         var data = JSON.stringify(RULES, null, 2);
-        // prompt used for portability; also try clipboard
-        try { navigator.clipboard && navigator.clipboard.writeText(data); } catch (e) { }
-        window.prompt('Copy your rules JSON:', data);
+        try {
+            var d = new Date();
+            var pad = function (n) { return (n < 10 ? '0' : '') + n; };
+            var stamp = d.getFullYear() + pad(d.getMonth() + 1) + pad(d.getDate()) +
+                '-' + pad(d.getHours()) + pad(d.getMinutes());
+            var blob = new Blob([data], { type: 'application/json' });
+            var url = URL.createObjectURL(blob);
+            var a = document.createElement('a');
+            a.__fwUI = true;
+            a.href = url;
+            a.download = 'traffic-firewall-rules-' + stamp + '.json';
+            (document.body || document.documentElement).appendChild(a);
+            a.click();
+            setTimeout(function () { try { a.remove(); } catch (e) { } URL.revokeObjectURL(url); }, 0);
+        } catch (e) {
+            // Fallback if Blob/download is unavailable: copy + prompt.
+            try { navigator.clipboard && navigator.clipboard.writeText(data); } catch (e2) { }
+            window.prompt('Copy your rules JSON:', data);
+        }
     }
 
+    // Import rules from a chosen .json file (replaces the current rules).
     function importRules() {
-        var raw = window.prompt('Paste rules JSON to import (replaces current rules):', '');
-        if (!raw) return;
-        try {
-            var parsed = JSON.parse(raw);
-            if (!Array.isArray(parsed)) throw new Error('expected an array');
-            RULES = parsed;
-            saveRules(RULES);
-            renderRules();
-        } catch (e) {
-            alert('Invalid JSON: ' + e.message);
-        }
+        var input = document.createElement('input');
+        input.type = 'file';
+        input.accept = 'application/json,.json';
+        input.__fwUI = true;
+        input.style.cssText = 'position:fixed;left:-9999px;top:0';
+        input.addEventListener('change', function () {
+            var file = input.files && input.files[0];
+            if (!file) { try { input.remove(); } catch (e) { } return; }
+            var reader = new FileReader();
+            reader.onload = function () {
+                try {
+                    var parsed = JSON.parse(String(reader.result));
+                    if (!Array.isArray(parsed)) throw new Error('expected an array of rules');
+                    if (RULES.length && !confirm('Replace your ' + RULES.length +
+                        ' current rule(s) with ' + parsed.length + ' imported rule(s)?')) {
+                        return;
+                    }
+                    RULES = parsed;
+                    saveRules(RULES);
+                    switchTab('rules');
+                    renderRules();
+                } catch (e) {
+                    alert('Invalid rules file: ' + e.message);
+                } finally {
+                    try { input.remove(); } catch (e) { }
+                }
+            };
+            reader.onerror = function () { alert('Could not read the file.'); try { input.remove(); } catch (e) { } };
+            reader.readAsText(file);
+        });
+        (document.body || document.documentElement).appendChild(input);
+        input.click();
     }
 
     /* -------------------------------------------------------------------- */
