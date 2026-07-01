@@ -1,0 +1,14 @@
+// ==UserScript==
+// @name        Browser Traffic Firewall
+// @namespace   Violentmonkey Scripts
+// @match       *://*/*
+// @exclude     https://www.youtube.com*
+// @grant       GM_setValue
+// @grant       GM_getValue
+// @grant       GM_registerMenuCommand
+// @grant       GM_addStyle
+// @version     2.0
+// @author      -
+// @description Intercept XHR / fetch / WebSocket / sendBeacon traffic and apply firewall rules to block, alert or replace requests.
+// @run-at      document-start
+// ==/UserScript==

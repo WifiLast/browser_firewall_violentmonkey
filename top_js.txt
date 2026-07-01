@@ -1,0 +1,123 @@
+1
+gh/prebid/currency-file
+40 443 731 290
+58 165 GB
+2
+gh/orioncactus/pretendard
+19 992 405 787
+3 098 989 GB
+3
+npm/swiper
+18 893 476 766
+375 687 GB
+4
+npm/bootstrap
+15 348 645 246
+413 121 GB
+5
+gh/prebid/shared-id
+10 837 442 630
+8 208 GB
+6
+npm/prebid-universal-creative
+7 259 483 332
+54 769 GB
+7
+npm/emoji-datasource-apple
+7 148 183 552
+62 465 GB
+8
+npm/slick-carousel
+6 729 855 582
+41 778 GB
+9
+npm/hls.js
+6 401 259 352
+974 617 GB
+10
+npm/workbox-cdn
+5 350 917 179
+10 491 GB
+
+
+11
+npm/bootstrap-icons
+4 698 644 980
+248 197 GB
+12
+npm/gsap
+3 245 375 642
+70 909 GB
+13
+npm/@finsweet/attributes
+3 123 976 230
+7 120 GB
+14
+gh/lipis/flag-icons
+2 872 071 314
+7 579 GB
+15
+npm/mathjax
+2 806 011 843
+187 268 GB
+16
+npm/katex
+2 741 945 393
+53 672 GB
+17
+npm/sweetalert2
+2 597 875 942
+46 644 GB
+18
+gh/ayanjuwel/love_my_bou
+2 501 123 729
+79 474 GB
+19
+gh/foyer-work/cdn-files
+2 404 231 359
+1 457 GB
+20
+gh/twitter/twemoji
+2 321 545 191
+3 188 GB
+
+21
+npm/search-insights
+2 254 586 361
+8 294 GB
+22
+gh/jdecked/twemoji
+2 136 354 957
+3 391 GB
+23
+npm/@shoelace-style/shoelace
+2 050 507 022
+3 429 GB
+24
+gh/uBlockOrigin/uAssetsCDN
+2 024 827 221
+612 377 GB
+25
+npm/@splidejs/splide
+2 024 214 093
+15 901 GB
+26
+npm/@fancyapps/ui
+1 979 549 950
+44 341 GB
+27
+npm/select2
+1 941 734 307
+20 216 GB
+28
+npm/js-cookie
+1 727 141 448
+3 786 GB
+29
+npm/jquery
+1 609 672 011
+58 009 GB
+30
+npm/yandex-metrica-watch
+1 536 807 284
+166 851 GB
