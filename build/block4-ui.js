@@ -16,16 +16,16 @@
         return [
             '#fw-overlay{position:fixed;inset:0;background:rgba(0,0,0,.55);z-index:2147483646;display:none;font-family:system-ui,Segoe UI,Arial,sans-serif}',
             '#fw-overlay.open{display:flex;align-items:center;justify-content:center}',
-            '#fw-modal{background:#1e2127;color:#e6e6e6;width:min(920px,94vw);max-height:88vh;border-radius:10px;box-shadow:0 12px 48px rgba(0,0,0,.6);display:flex;flex-direction:column;overflow:hidden}',
+            '#fw-modal{background:#1e2127;color:#e6e6e6;width:min(1100px,96vw);max-width:96vw;max-height:88vh;border-radius:10px;box-shadow:0 12px 48px rgba(0,0,0,.6);display:flex;flex-direction:column;overflow:hidden}',
             '#fw-modal header{display:flex;align-items:center;gap:10px;padding:14px 18px;background:#12151a;border-bottom:1px solid #2c313a}',
             '#fw-modal header h2{margin:0;font-size:16px;font-weight:600;flex:1}',
             '#fw-modal header .fw-badge{font-size:11px;background:#2c313a;padding:2px 8px;border-radius:10px;color:#9aa4b2}',
             '.fw-tabs{display:flex;gap:4px;padding:8px 18px 0;background:#12151a}',
             '.fw-tab{padding:8px 14px;cursor:pointer;border:none;background:none;color:#9aa4b2;font-size:13px;border-bottom:2px solid transparent}',
             '.fw-tab.active{color:#fff;border-bottom-color:#4d8bf0}',
-            '.fw-body{padding:16px 18px;overflow:auto}',
-            '.fw-body table{width:100%;border-collapse:collapse;font-size:12.5px}',
-            '.fw-body th,.fw-body td{text-align:left;padding:6px 8px;border-bottom:1px solid #2c313a;vertical-align:top}',
+            '.fw-body{padding:16px 18px;overflow-y:auto;overflow-x:hidden}',
+            '.fw-body table{width:100%;border-collapse:collapse;font-size:12.5px;table-layout:fixed}',
+            '.fw-body th,.fw-body td{text-align:left;padding:6px 8px;border-bottom:1px solid #2c313a;vertical-align:top;overflow-wrap:anywhere;word-break:break-word}',
             '.fw-body th{color:#9aa4b2;font-weight:600;position:sticky;top:0;background:#1e2127}',
             '.fw-input,.fw-select{background:#12151a;color:#e6e6e6;border:1px solid #2c313a;border-radius:5px;padding:6px 8px;font-size:12.5px;width:100%;box-sizing:border-box}',
             '.fw-btn{cursor:pointer;border:none;border-radius:5px;padding:7px 13px;font-size:12.5px;font-weight:600}',
@@ -195,12 +195,17 @@
         }
 
         var rows = RULES.map(function (r, i) {
+            var full = String(r.pattern || '');
+            // Show just the base path (drop query/hash); full value on hover.
+            var shortPat = full.split('?')[0].split('#')[0];
+            if (shortPat.length > 60) shortPat = shortPat.slice(0, 57) + '…';
+            else if (shortPat.length !== full.length) shortPat += '…';   // signal trimmed query
             return '<tr data-i="' + i + '">' +
                 '<td><input type="checkbox" class="fw-en" ' + (r.enabled ? 'checked' : '') + '></td>' +
                 '<td>' + escapeHtml(r.name || '(unnamed)') + '</td>' +
                 '<td>' + escapeHtml(r.type || 'any') + '</td>' +
                 '<td>' + escapeHtml(r.method || 'any') + '</td>' +
-                '<td>' + escapeHtml(r.matchType) + ': <code>' + escapeHtml(r.pattern) + '</code></td>' +
+                '<td title="' + escapeHtml(full) + '">' + escapeHtml(r.matchType) + ': <code>' + escapeHtml(shortPat) + '</code></td>' +
                 '<td><span class="fw-tag ' + r.action + '">' + escapeHtml(r.action) + '</span></td>' +
                 '<td><div class="fw-row-actions">' +
                 '<button class="fw-btn ghost mini fw-edit">Edit</button>' +
