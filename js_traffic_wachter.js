@@ -2,7 +2,6 @@
 // @name        Browser Traffic Firewall
 // @namespace   Violentmonkey Scripts
 // @match       *://*/*
-// @exclude     https://www.youtube.com*
 // @grant       GM_setValue
 // @grant       GM_getValue
 // @grant       GM_registerMenuCommand
