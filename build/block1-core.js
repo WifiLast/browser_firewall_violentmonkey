@@ -153,6 +153,25 @@
                 set: function (value) {
                     if (frozen && this.isConnected && !isFwNode(this)) return;   // page frozen (live DOM only)
                     if (typeof value === 'string') {
+                        // Our own UI is trusted markup. Under Trusted Types a raw-string
+                        // assignment runs the page's DEFAULT policy — often a sanitizer that
+                        // rejects our <select>/<button>/data-* markup — so never let our UI
+                        // hit that path. Prefer our pass-through policy; if the page's
+                        // trusted-types allow-list blocked it, build the nodes with DOMParser
+                        // (not a TT sink) so the UI always renders. Page nodes keep native
+                        // behaviour so the site's own protection is untouched.
+                        if (isFwNode(this)) {
+                            if (TT_POLICY) {
+                                try { desc.set.call(this, TT_POLICY.createHTML(value)); return; } catch (e) { }
+                            }
+                            try {
+                                var doc = new DOMParser().parseFromString(value, 'text/html');
+                                while (this.firstChild) this.removeChild(this.firstChild);
+                                var kids = doc.body ? Array.prototype.slice.call(doc.body.childNodes) : [];
+                                for (var i = 0; i < kids.length; i++) this.appendChild(document.importNode(kids[i], true));
+                                return;
+                            } catch (e) { this.textContent = value; return; }
+                        }
                         try {
                             desc.set.call(this, value);   // compliant / non-enforcing page
                             return;

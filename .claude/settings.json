@@ -1,0 +1,8 @@
+{
+  "permissions": {
+    "allow": [
+      "Bash(node build/build.js)",
+      "Bash(node --check js_traffic_wachter.js)"
+    ]
+  }
+}
