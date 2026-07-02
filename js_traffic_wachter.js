@@ -1,5 +1,5 @@
 // ==UserScript==
-// @name        Browser Traffic Firewall
+// @name        NetFence
 // @namespace   Violentmonkey Scripts
 // @match       *://*/*
 // @grant       GM_setValue
@@ -354,13 +354,13 @@
         writeStore(MODE_KEY, m);
         askedSigs = {};
         pageDecision = null;
-        modeListeners.forEach(function (fn) { try { fn(m); } catch (e) {} });
+        modeListeners.forEach(function (fn) { try { fn(m); } catch (e) { } });
         console.log('[Traffic Firewall] mode → ' + m);
     }
 
     function connSignature(type, method, url) {
         var host = url;
-        try { host = new URL(url, location.href).host; } catch (e) {}
+        try { host = new URL(url, location.href).host; } catch (e) { }
         return type + '|' + host;
     }
 
@@ -476,14 +476,14 @@
     // Decode \uXXXX and \xXX escape sequences.
     function decodeEscapes(s) {
         return s.replace(/\\u([0-9a-fA-F]{4})/g, function (_, h) { return String.fromCharCode(parseInt(h, 16)); })
-                .replace(/\\x([0-9a-fA-F]{2})/g, function (_, h) { return String.fromCharCode(parseInt(h, 16)); });
+            .replace(/\\x([0-9a-fA-F]{2})/g, function (_, h) { return String.fromCharCode(parseInt(h, 16)); });
     }
     // Decode HTML numeric + a few common named entities.
     function decodeEntities(s) {
         return s.replace(/&#x([0-9a-fA-F]+);/g, function (_, h) { return String.fromCharCode(parseInt(h, 16)); })
-                .replace(/&#(\d+);/g, function (_, d) { return String.fromCharCode(parseInt(d, 10)); })
-                .replace(/&amp;/g, '&').replace(/&lt;/g, '<').replace(/&gt;/g, '>')
-                .replace(/&quot;/g, '"').replace(/&#0*39;/g, "'").replace(/&apos;/g, "'");
+            .replace(/&#(\d+);/g, function (_, d) { return String.fromCharCode(parseInt(d, 10)); })
+            .replace(/&amp;/g, '&').replace(/&lt;/g, '<').replace(/&gt;/g, '>')
+            .replace(/&quot;/g, '"').replace(/&#0*39;/g, "'").replace(/&apos;/g, "'");
     }
     // Decode every base64-looking token (incl. url-safe) and concat readable text.
     function decodeBase64Tokens(s) {
@@ -738,7 +738,7 @@
                 ctx.via ? '⚠ Hidden watch-tag ' : 'Matched watch-tag ',
                 mk('b', { text: ctx.tag }),
                 ctx.via ? mk('span', { text: ' — revealed in ' + ctx.via }) : null
-              ])
+            ])
             : mk('div', { cls: 'fw-ask-reason', text: 'New connection (normal mode)' });
 
         var meta = mk('div', { cls: 'fw-ask-meta' }, [
@@ -803,10 +803,10 @@
                         ? (function () { try { return JSON.parse(body || '{}'); } catch (e) { return {}; } })()
                         : body;
                     try {
-                        Object.defineProperty(xhr, 'readyState',   { value: 4, configurable: true });
-                        Object.defineProperty(xhr, 'status',       { value: 200, configurable: true });
+                        Object.defineProperty(xhr, 'readyState', { value: 4, configurable: true });
+                        Object.defineProperty(xhr, 'status', { value: 200, configurable: true });
                         Object.defineProperty(xhr, 'responseText', { value: body, configurable: true });
-                        Object.defineProperty(xhr, 'response',     { value: resp, configurable: true });
+                        Object.defineProperty(xhr, 'response', { value: resp, configurable: true });
                     } catch (e) { }
                     if (typeof xhr.onreadystatechange === 'function') xhr.onreadystatechange();
                     xhr.dispatchEvent(new Event('readystatechange'));
@@ -1023,8 +1023,10 @@
         try { node.removeAttribute('integrity'); } catch (e) { }
         try { node.setAttribute(attr, toUrl); } catch (e) { }
         try { if (attr === 'href') node.href = toUrl; else node.src = toUrl; } catch (e) { }
-        addLog({ type: info.type, method: 'REDIRECT', url: toUrl, action: 'replace',
-                 ruleName: (reason ? reason + ' ' : '') + '→ ' + toUrl, body: '' });
+        addLog({
+            type: info.type, method: 'REDIRECT', url: toUrl, action: 'replace',
+            ruleName: (reason ? reason + ' ' : '') + '→ ' + toUrl, body: ''
+        });
         recordJs(info.url, 'replace', (reason || '') + ' → ' + toUrl);
         console.warn('[Traffic Firewall] redirected ' + info.type + ':', info.url, '→', toUrl, '(' + (reason || '') + ')');
     }
@@ -1049,8 +1051,10 @@
             s.async = false;
             s.src = toUrl;
             (document.head || document.documentElement).appendChild(s);
-            addLog({ type: 'script', method: 'REDIRECT', url: toUrl, action: 'replace',
-                     ruleName: (reason ? reason + ' ' : '') + '→ ' + toUrl, body: '' });
+            addLog({
+                type: 'script', method: 'REDIRECT', url: toUrl, action: 'replace',
+                ruleName: (reason ? reason + ' ' : '') + '→ ' + toUrl, body: ''
+            });
         } catch (e) { }
     }
 
@@ -1092,8 +1096,10 @@
         if (rule && rule.action === 'alert') {
             return { action: 'alert', reason: 'rule: ' + (rule.name || rule.pattern), active: true };
         }
-        return { action: 'allow', reason: rule ? ('rule: ' + (rule.name || rule.pattern)) : '',
-                 active: (POLICY.mode !== 'off') || !!rule };
+        return {
+            action: 'allow', reason: rule ? ('rule: ' + (rule.name || rule.pattern)) : '',
+            active: (POLICY.mode !== 'off') || !!rule
+        };
     }
 
     // Neutralize a script element so it cannot execute.
@@ -1114,8 +1120,8 @@
         switch (node.tagName) {
             case 'SCRIPT': var s = node.src || g('src'); return s ? { type: 'script', attr: 'src', url: s } : null;
             case 'IFRAME': var f = node.src || g('src'); return f ? { type: 'iframe', attr: 'src', url: f } : null;
-            case 'IMG':    var i = node.src || g('src'); return i ? { type: 'image', attr: 'src', url: i } : null;
-            case 'LINK':   var h = node.href || g('href'); return h ? { type: 'stylesheet', attr: 'href', url: h } : null;
+            case 'IMG': var i = node.src || g('src'); return i ? { type: 'image', attr: 'src', url: i } : null;
+            case 'LINK': var h = node.href || g('href'); return h ? { type: 'stylesheet', attr: 'href', url: h } : null;
             case 'VIDEO':
             case 'AUDIO':
             case 'SOURCE': var m = node.src || g('src'); return m ? { type: 'media', attr: 'src', url: m } : null;
@@ -1168,8 +1174,10 @@
                 // src would load BOTH. Disarm the original and inject the
                 // replacement fresh instead.
                 disarmScript(node);
-                addLog({ type: 'script', method: 'REDIRECT', url: resolveUrl(info.url), action: 'replace',
-                         ruleName: (d.reason ? d.reason + ' ' : '') + '→ ' + d.to, body: '' });
+                addLog({
+                    type: 'script', method: 'REDIRECT', url: resolveUrl(info.url), action: 'replace',
+                    ruleName: (d.reason ? d.reason + ' ' : '') + '→ ' + d.to, body: ''
+                });
                 recordJs(info.url, 'replace', (d.reason || '') + ' → ' + d.to);
                 injectRedirectScript(d.to, d.reason);
             } else {
@@ -1452,11 +1460,11 @@
             '<h2>🔥 Traffic Firewall</h2>' +
             '<span class="fw-badge" id="fw-count"></span>' +
             '<label class="fw-mode-wrap" title="How new (unmatched) connections are handled">Mode ' +
-                '<select class="fw-select fw-mode-sel" id="fw-mode">' +
-                    '<option value="disabled">Disabled</option>' +
-                    '<option value="normal">Normal (ask)</option>' +
-                    '<option value="learning">Learning (auto-rule)</option>' +
-                '</select>' +
+            '<select class="fw-select fw-mode-sel" id="fw-mode">' +
+            '<option value="disabled">Disabled</option>' +
+            '<option value="normal">Normal (ask)</option>' +
+            '<option value="learning">Learning (auto-rule)</option>' +
+            '</select>' +
             '</label>' +
             '<button class="fw-close" title="Close">×</button>' +
             '</header>' +
@@ -1477,16 +1485,16 @@
             '<button class="fw-btn ghost" id="fw-export">Export</button>' +
             '<button class="fw-btn ghost" id="fw-import">Import</button>' +
             '<label class="fw-mode-wrap" title="How a blocked request is delivered to the page">Blocked → ' +
-                '<select class="fw-select fw-mode-sel" id="fw-blockstyle">' +
-                    '<option value="empty">Empty response (quiet)</option>' +
-                    '<option value="error">Network error</option>' +
-                '</select>' +
+            '<select class="fw-select fw-mode-sel" id="fw-blockstyle">' +
+            '<option value="empty">Empty response (quiet)</option>' +
+            '<option value="error">Network error</option>' +
+            '</select>' +
             '</label>' +
             '<label class="fw-mode-wrap" title="Requests to the page\'s own domain are trusted so the firewall only polices third-party traffic">First-party ' +
-                '<select class="fw-select fw-mode-sel" id="fw-firstparty">' +
-                    '<option value="on">allow (recommended)</option>' +
-                    '<option value="off">apply rules</option>' +
-                '</select>' +
+            '<select class="fw-select fw-mode-sel" id="fw-firstparty">' +
+            '<option value="on">allow (recommended)</option>' +
+            '<option value="off">apply rules</option>' +
+            '</select>' +
             '</label>' +
             '<span class="spacer"></span>' +
             '<button class="fw-btn danger" id="fw-clearlog">Clear log</button>' +
@@ -1623,10 +1631,10 @@
                 (e.ruleName ? '<div style="margin-top:4px;color:#6b7480">rule: ' + escapeHtml(e.ruleName) + '</div>' : '') +
                 (e.body ? '<div class="fw-detail-body">' + escapeHtml(e.body) + '</div>' : '') +
                 '<div style="margin-top:8px">' +
-                    '<button class="fw-btn ghost mini fw-log-rule"' +
-                        ' data-type="' + escapeHtml(e.type) + '"' +
-                        ' data-method="' + escapeHtml(e.method || 'any') + '"' +
-                        ' data-url="' + escapeHtml(full) + '">+ Create rule from this</button>' +
+                '<button class="fw-btn ghost mini fw-log-rule"' +
+                ' data-type="' + escapeHtml(e.type) + '"' +
+                ' data-method="' + escapeHtml(e.method || 'any') + '"' +
+                ' data-url="' + escapeHtml(full) + '">+ Create rule from this</button>' +
                 '</div>' +
                 '</td></tr>';
             return main + detail;
@@ -1667,20 +1675,20 @@
         var host = overlay.querySelector('#fw-body-tags');
         host.innerHTML =
             '<p style="margin-top:0;color:#9aa4b2;font-size:12.5px">' +
-                'Enter keywords (one per line). If a request contains any of them — anywhere in the ' +
-                'URL, POST body, request headers or cookies, case-insensitive — the firewall pops up a ' +
-                'prompt asking whether to <b>allow</b> or <b>block</b> it. Works in any mode.' +
+            'Enter keywords (one per line). If a request contains any of them — anywhere in the ' +
+            'URL, POST body, request headers or cookies, case-insensitive — the firewall pops up a ' +
+            'prompt asking whether to <b>allow</b> or <b>block</b> it. Works in any mode.' +
             '</p>' +
             '<textarea class="fw-input" id="t-list" rows="10" placeholder="sessionid\ntracking\nfbclid\naffiliate_id">' +
-                escapeHtml(TAGS.join('\n')) + '</textarea>' +
+            escapeHtml(TAGS.join('\n')) + '</textarea>' +
             '<label class="fw-ask-all" style="margin:12px 0 4px" title="Also match tags hidden behind common encodings">' +
-                '<input type="checkbox" id="t-deep"' + (DEEPSCAN.enabled ? ' checked' : '') + '>' +
-                ' <b>Deep scan</b> — also find tags that are <b>hidden or obscured</b> ' +
-                '(percent / base64 / hex / unicode / HTML-entity encoded, or split apart by separators)' +
+            '<input type="checkbox" id="t-deep"' + (DEEPSCAN.enabled ? ' checked' : '') + '>' +
+            ' <b>Deep scan</b> — also find tags that are <b>hidden or obscured</b> ' +
+            '(percent / base64 / hex / unicode / HTML-entity encoded, or split apart by separators)' +
             '</label>' +
             '<div class="fw-row-actions" style="margin-top:10px">' +
-                '<button class="fw-btn primary" id="t-save">Save tags</button>' +
-                '<span style="align-self:center;color:#6b7480;font-size:11.5px">' + TAGS.length + ' tag(s) active. Per-page "block all" resets on reload.</span>' +
+            '<button class="fw-btn primary" id="t-save">Save tags</button>' +
+            '<span style="align-self:center;color:#6b7480;font-size:11.5px">' + TAGS.length + ' tag(s) active. Per-page "block all" resets on reload.</span>' +
             '</div>';
 
         host.querySelector('#t-save').addEventListener('click', function () {

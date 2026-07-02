@@ -1,5 +1,5 @@
 // ==UserScript==
-// @name        Browser Traffic Firewall
+// @name        ThirdPartyFence
 // @namespace   Violentmonkey Scripts
 // @match       *://*/*
 // @grant       GM_setValue
