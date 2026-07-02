@@ -12,6 +12,7 @@ final single-file script `../js_traffic_wachter.js`.
 | `block2-network.js` | Watch-tags, decision engine, ask-user prompt modal, XHR/fetch/WebSocket/beacon interception |
 | `block3-resource-firewall.js` | JS-source white/black-list, script/iframe/img/media blocking & redirect (load a patched newer build / stub), loaded-script registry, DOM-mutation & page-freeze hooks |
 | `block4-ui.js` | Styles, settings modal, tab renderers, rule editor, launchers, boot |
+| `block5-antiprofiling.js` | Anti-fingerprinting: detect/spoof navigator, screen, canvas, WebGL, timezone, WebRTC, extension-probe surfaces + settings tab |
 | `build.js` | Combiner — wraps header + blocks in one IIFE and writes the final script |
 
 ## Build

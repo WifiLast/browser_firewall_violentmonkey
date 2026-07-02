@@ -134,6 +134,7 @@
     // 'script'/'any') first, then the JS-source white/black-list policy.
     // Returns { action:'block'|'alert'|'allow', reason, active }.
     function scriptDecision(rawSrc) {
+        if (profileBlocksExt(rawSrc)) return { action: 'block', reason: 'anti-profiling (extension)', active: true };
         var url = resolveUrl(rawSrc);
         var rule = findRule('script', 'GET', url);
         if (rule && rule.action === 'replace') {
@@ -183,6 +184,7 @@
 
     // Generic resource decision. Scripts also consult the JS-source policy.
     function resourceDecision(type, rawUrl) {
+        if (profileBlocksExt(rawUrl)) return { action: 'block', reason: 'anti-profiling (extension)', active: true };
         if (type === 'script') return scriptDecision(rawUrl);
         var url = resolveUrl(rawUrl);
         var rule = findRule(type, 'GET', url);

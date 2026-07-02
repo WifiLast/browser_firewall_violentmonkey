@@ -24,7 +24,8 @@ var BLOCKS = [
     'block1-core.js',              // storage, hardening, Trusted-Types shim, state, rule engine
     'block2-network.js',          // watch-tags, decision engine, prompt modal, XHR/fetch/WS/beacon
     'block3-resource-firewall.js',// JS-source policy, resource blocking, DOM-mutation & freeze hooks
-    'block4-ui.js'                // styles, settings modal, renderers, launchers, boot
+    'block4-ui.js',               // styles, settings modal, renderers, launchers, boot
+    'block5-antiprofiling.js'     // anti-fingerprinting hooks + settings tab
 ];
 
 function read(name) {

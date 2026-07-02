@@ -315,6 +315,52 @@
     function saveFirstParty(on) { writeStore(FIRSTPARTY_KEY, on ? 'on' : 'off'); }
     var FIRSTPARTY = { enabled: loadFirstParty() };
 
+    // Anti-profiling: detect and (optionally) spoof common browser-fingerprinting
+    // surfaces — language/locale, CPU/RAM, platform, screen, plugins, canvas,
+    // WebGL, time zone, WebRTC local IPs, and third-party extension probing.
+    // Opt-in (off by default) since spoofing can subtly change site behaviour.
+    var PROFILE_KEY = 'traffic_firewall_profile_v1';
+    function defaultProfile() {
+        return {
+            enabled: false,
+            mode: 'protect',   // 'protect' (spoof / block) | 'detect' (log only)
+            vectors: {
+                languages: true, hardware: true, platform: true, screen: true,
+                plugins: true, canvas: true, webgl: true,
+                timezone: false, webrtc: false, extensions: true
+            }
+        };
+    }
+    function loadProfile() {
+        try {
+            var raw = readStore(PROFILE_KEY, null);
+            if (!raw) return defaultProfile();
+            var p = JSON.parse(raw), d = defaultProfile(), v = {};
+            for (var k in d.vectors) v[k] = (p.vectors && k in p.vectors) ? !!p.vectors[k] : d.vectors[k];
+            return { enabled: !!p.enabled, mode: p.mode === 'detect' ? 'detect' : 'protect', vectors: v };
+        } catch (e) { return defaultProfile(); }
+    }
+    function saveProfile(p) { writeStore(PROFILE_KEY, JSON.stringify(p)); }
+    var PROFILE = loadProfile();
+    var PROFILE_APPLIED = [];   // surfaces actually shielded this page (for the UI)
+    var PROFILE_SEEN = {};      // dedupe so each surface is logged once per session
+
+    // Log a fingerprinting-surface access. `spoofed` = we returned a fake value.
+    function logProfile(vector, spoofed) {
+        if (PROFILE_SEEN[vector]) return;
+        PROFILE_SEEN[vector] = true;
+        addLog({ type: 'profile', method: spoofed ? 'SPOOF' : 'READ', url: vector,
+                 action: spoofed ? 'replace' : 'alert', ruleName: 'anti-profiling', body: '' });
+    }
+    function isExtScheme(url) {
+        return /^\s*(chrome-extension|moz-extension|safari-web-extension):/i.test(String(url || ''));
+    }
+    // True when a request to an extension URL should be blocked to defeat
+    // web-accessible-resource probing (a common extension-detection trick).
+    function profileBlocksExt(url) {
+        return PROFILE.enabled && PROFILE.mode === 'protect' && PROFILE.vectors.extensions && isExtScheme(url);
+    }
+
     // Page-wide decision from the prompt's "apply to all following" option.
     // Reset on navigation (fresh script load) and when the mode changes.
     var pageDecision = null;   // null | 'block' | 'allow'

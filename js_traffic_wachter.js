@@ -332,6 +332,52 @@
     function saveFirstParty(on) { writeStore(FIRSTPARTY_KEY, on ? 'on' : 'off'); }
     var FIRSTPARTY = { enabled: loadFirstParty() };
 
+    // Anti-profiling: detect and (optionally) spoof common browser-fingerprinting
+    // surfaces — language/locale, CPU/RAM, platform, screen, plugins, canvas,
+    // WebGL, time zone, WebRTC local IPs, and third-party extension probing.
+    // Opt-in (off by default) since spoofing can subtly change site behaviour.
+    var PROFILE_KEY = 'traffic_firewall_profile_v1';
+    function defaultProfile() {
+        return {
+            enabled: false,
+            mode: 'protect',   // 'protect' (spoof / block) | 'detect' (log only)
+            vectors: {
+                languages: true, hardware: true, platform: true, screen: true,
+                plugins: true, canvas: true, webgl: true,
+                timezone: false, webrtc: false, extensions: true
+            }
+        };
+    }
+    function loadProfile() {
+        try {
+            var raw = readStore(PROFILE_KEY, null);
+            if (!raw) return defaultProfile();
+            var p = JSON.parse(raw), d = defaultProfile(), v = {};
+            for (var k in d.vectors) v[k] = (p.vectors && k in p.vectors) ? !!p.vectors[k] : d.vectors[k];
+            return { enabled: !!p.enabled, mode: p.mode === 'detect' ? 'detect' : 'protect', vectors: v };
+        } catch (e) { return defaultProfile(); }
+    }
+    function saveProfile(p) { writeStore(PROFILE_KEY, JSON.stringify(p)); }
+    var PROFILE = loadProfile();
+    var PROFILE_APPLIED = [];   // surfaces actually shielded this page (for the UI)
+    var PROFILE_SEEN = {};      // dedupe so each surface is logged once per session
+
+    // Log a fingerprinting-surface access. `spoofed` = we returned a fake value.
+    function logProfile(vector, spoofed) {
+        if (PROFILE_SEEN[vector]) return;
+        PROFILE_SEEN[vector] = true;
+        addLog({ type: 'profile', method: spoofed ? 'SPOOF' : 'READ', url: vector,
+                 action: spoofed ? 'replace' : 'alert', ruleName: 'anti-profiling', body: '' });
+    }
+    function isExtScheme(url) {
+        return /^\s*(chrome-extension|moz-extension|safari-web-extension):/i.test(String(url || ''));
+    }
+    // True when a request to an extension URL should be blocked to defeat
+    // web-accessible-resource probing (a common extension-detection trick).
+    function profileBlocksExt(url) {
+        return PROFILE.enabled && PROFILE.mode === 'protect' && PROFILE.vectors.extensions && isExtScheme(url);
+    }
+
     // Page-wide decision from the prompt's "apply to all following" option.
     // Reset on navigation (fresh script load) and when the mode changes.
     var pageDecision = null;   // null | 'block' | 'allow'
@@ -623,6 +669,10 @@
     // `canPrompt` is false for callers that cannot wait for an async modal
     // (sendBeacon, WebSocket) — those fall back to the page decision or allow.
     function classify(type, method, url, body, headerStr, canPrompt) {
+        // Anti-profiling: deny requests to extension URLs so pages can't probe
+        // for installed extensions via their web-accessible resources.
+        if (profileBlocksExt(url)) { logProfile('extension-probe', true); return { action: 'block', ruleName: 'anti-profiling (extension)' }; }
+
         // Explicit rules always win (except in disabled mode).
         if (MODE !== 'disabled') {
             var rule = findRule(type, method, url);
@@ -1095,6 +1145,7 @@
     // 'script'/'any') first, then the JS-source white/black-list policy.
     // Returns { action:'block'|'alert'|'allow', reason, active }.
     function scriptDecision(rawSrc) {
+        if (profileBlocksExt(rawSrc)) return { action: 'block', reason: 'anti-profiling (extension)', active: true };
         var url = resolveUrl(rawSrc);
         var rule = findRule('script', 'GET', url);
         if (rule && rule.action === 'replace') {
@@ -1144,6 +1195,7 @@
 
     // Generic resource decision. Scripts also consult the JS-source policy.
     function resourceDecision(type, rawUrl) {
+        if (profileBlocksExt(rawUrl)) return { action: 'block', reason: 'anti-profiling (extension)', active: true };
         if (type === 'script') return scriptDecision(rawUrl);
         var url = resolveUrl(rawUrl);
         var rule = findRule(type, 'GET', url);
@@ -1405,19 +1457,20 @@
         return [
             '#fw-overlay{position:fixed;inset:0;background:rgba(0,0,0,.55);z-index:2147483646;display:none;font-family:system-ui,Segoe UI,Arial,sans-serif}',
             '#fw-overlay.open{display:flex;align-items:center;justify-content:center}',
-            '#fw-modal{background:#1e2127;color:#e6e6e6;width:min(1100px,96vw);max-width:96vw;max-height:88vh;border-radius:10px;box-shadow:0 12px 48px rgba(0,0,0,.6);display:flex;flex-direction:column;overflow:hidden}',
+            '#fw-modal{background:#1e2127!important;color:#e6e6e6!important;width:min(1100px,96vw);max-width:96vw;max-height:88vh;border-radius:10px;box-shadow:0 12px 48px rgba(0,0,0,.6);display:flex;flex-direction:column;overflow:hidden}',
             '#fw-modal header{display:flex;align-items:center;gap:10px;padding:14px 18px;background:#12151a;border-bottom:1px solid #2c313a}',
             '#fw-modal header h2{margin:0;font-size:16px;font-weight:600;flex:1}',
             '#fw-modal header .fw-badge{font-size:11px;background:#2c313a;padding:2px 8px;border-radius:10px;color:#9aa4b2}',
             '.fw-tabs{display:flex;gap:4px;padding:8px 18px 0;background:#12151a}',
             '.fw-tab{padding:8px 14px;cursor:pointer;border:none;background:none;color:#9aa4b2;font-size:13px;border-bottom:2px solid transparent}',
             '.fw-tab.active{color:#fff;border-bottom-color:#4d8bf0}',
-            '.fw-body{padding:16px 18px;overflow-y:auto;overflow-x:hidden}',
-            '.fw-body table{width:100%;border-collapse:collapse;font-size:12.5px;table-layout:fixed}',
-            '.fw-body th,.fw-body td{text-align:left;padding:6px 8px;border-bottom:1px solid #2c313a;vertical-align:top;overflow-wrap:anywhere;word-break:break-word}',
-            '.fw-body th{color:#9aa4b2;font-weight:600;position:sticky;top:0;background:#1e2127}',
+            '.fw-body{padding:16px 18px;overflow-y:auto;overflow-x:hidden;background:#1e2127!important;color:#e6e6e6!important}',
+            '.fw-body table{width:100%;border-collapse:collapse;font-size:12.5px;table-layout:fixed;background:transparent!important}',
+            '.fw-body th,.fw-body td{text-align:left;padding:6px 8px;border-bottom:1px solid #2c313a;vertical-align:top;overflow-wrap:anywhere;word-break:break-word;background:transparent!important;color:#e6e6e6!important}',
+            '.fw-body th{color:#9aa4b2!important;font-weight:600;position:sticky;top:0;background:#1e2127!important}',
+            '.fw-body code{background:#12151a!important;color:#cfe1ff!important;padding:1px 4px;border-radius:3px}',
             '.fw-input,.fw-select{background:#12151a!important;color:#e6e6e6!important;border:1px solid #2c313a;border-radius:5px;padding:6px 8px;font-size:12.5px;width:100%;box-sizing:border-box}',
-            '.fw-select option{color:#000!important;background:#fff!important}',
+            '.fw-select option{color:#e6e6e6!important;background:#1e2127!important}',
             '.fw-btn{cursor:pointer;border:none;border-radius:5px;padding:7px 13px;font-size:12.5px;font-weight:600}',
             '.fw-btn.primary{background:#4d8bf0;color:#fff}',
             '.fw-btn.ghost{background:#2c313a;color:#e6e6e6}',
@@ -1442,7 +1495,7 @@
             '.fw-log tr.fw-log-row:hover{background:#232833}',
             '.fw-log .fw-url-short{color:#9aa4b2}',
             '.fw-log .fw-caret{display:inline-block;width:12px;color:#6b7480}',
-            '.fw-log tr.fw-log-detail>td{background:#171b21;color:#c7d0da;padding:8px 10px}',
+            '.fw-log tr.fw-log-detail>td{background:#171b21!important;color:#c7d0da!important;padding:8px 10px}',
             '.fw-log .fw-detail-url{word-break:break-all;color:#cfe1ff}',
             '.fw-log .fw-detail-body{white-space:pre-wrap;word-break:break-all;margin-top:6px;color:#9aa4b2;max-height:160px;overflow:auto}',
             '#fw-fab{position:fixed;bottom:16px;right:16px;z-index:2147483645;width:44px;height:44px;border-radius:50%;background:#4d8bf0;color:#fff;border:none;cursor:pointer;font-size:20px;box-shadow:0 4px 14px rgba(0,0,0,.4)}',
@@ -1485,12 +1538,14 @@
             '<button class="fw-tab" data-tab="tags">Watch Tags</button>' +
             '<button class="fw-tab" data-tab="js">JS Sources</button>' +
             '<button class="fw-tab" data-tab="harden">Hardening</button>' +
+            '<button class="fw-tab" data-tab="profile">Anti-Profiling</button>' +
             '<button class="fw-tab" data-tab="log">Activity Log</button>' +
             '</div>' +
             '<div class="fw-body" id="fw-body-rules"></div>' +
             '<div class="fw-body" id="fw-body-tags" style="display:none"></div>' +
             '<div class="fw-body" id="fw-body-js" style="display:none"></div>' +
             '<div class="fw-body" id="fw-body-harden" style="display:none"></div>' +
+            '<div class="fw-body" id="fw-body-profile" style="display:none"></div>' +
             '<div class="fw-body" id="fw-body-log" style="display:none"></div>' +
             '<div class="fw-foot">' +
             '<button class="fw-btn primary" id="fw-add">+ Add rule</button>' +
@@ -1549,6 +1604,7 @@
         renderTags();
         renderPolicy();
         renderHardening();
+        renderProfile();
         renderLog();
         logListeners.push(function () { if (activeTab === 'log') renderLog(); });
     }
@@ -1562,11 +1618,13 @@
         overlay.querySelector('#fw-body-tags').style.display = tab === 'tags' ? '' : 'none';
         overlay.querySelector('#fw-body-js').style.display = tab === 'js' ? '' : 'none';
         overlay.querySelector('#fw-body-harden').style.display = tab === 'harden' ? '' : 'none';
+        overlay.querySelector('#fw-body-profile').style.display = tab === 'profile' ? '' : 'none';
         overlay.querySelector('#fw-body-log').style.display = tab === 'log' ? '' : 'none';
         if (tab === 'log') renderLog();
         if (tab === 'tags') renderTags();
         if (tab === 'js') renderPolicy();
         if (tab === 'harden') renderHardening();
+        if (tab === 'profile') renderProfile();
     }
 
     function escapeHtml(s) {
@@ -2136,4 +2194,260 @@
     });
 
     console.log('[Traffic Firewall] active — ' + RULES.length + ' rule(s). Ctrl+Shift+F or 🔥 button to configure.');
+
+    /* ==================================================================== */
+    /*  Anti-profiling — detect & (optionally) spoof fingerprinting surfaces */
+    /*  Runs at document-start, before the page's own scripts, so the values  */
+    /*  it shields are already in place the first time the page reads them.   */
+    /* ==================================================================== */
+
+    // Add tiny random noise to a canvas' pixels so its fingerprint differs on
+    // every read (defeats stable canvas fingerprinting) without visibly changing
+    // the image. Uses the ORIGINAL getImageData/putImageData captured before we
+    // hook them.
+    function fwCanvasNoise(canvas, origGID, origPID) {
+        try {
+            var ctx = canvas.getContext && canvas.getContext('2d');
+            if (!ctx || !canvas.width || !canvas.height) return;
+            var img = origGID.call(ctx, 0, 0, canvas.width, canvas.height);
+            var d = img.data, n = Math.min(24, (d.length / 4) | 0);
+            for (var i = 0; i < n; i++) {
+                var p = ((Math.random() * (d.length / 4)) | 0) * 4;
+                d[p] = d[p] ^ 1;   // flip the low bit of one channel
+            }
+            origPID.call(ctx, img, 0, 0);
+        } catch (e) { }
+    }
+
+    function fwHookCanvas(win, protect) {
+        var CE = win.HTMLCanvasElement, CTX = win.CanvasRenderingContext2D;
+        var origGID = CTX && CTX.prototype.getImageData;
+        var origPID = CTX && CTX.prototype.putImageData;
+        if (CE) {
+            ['toDataURL', 'toBlob'].forEach(function (m) {
+                var orig = CE.prototype[m];
+                if (typeof orig !== 'function') return;
+                CE.prototype[m] = function () {
+                    logProfile('canvas.' + m, protect);
+                    if (protect && origGID && origPID) fwCanvasNoise(this, origGID, origPID);
+                    return orig.apply(this, arguments);
+                };
+            });
+            PROFILE_APPLIED.push('canvas');
+        }
+        if (CTX && origGID) {
+            CTX.prototype.getImageData = function () {
+                logProfile('canvas.getImageData', protect);
+                var r = origGID.apply(this, arguments);
+                if (protect && r && r.data) {
+                    var d = r.data, n = Math.min(24, (d.length / 4) | 0);
+                    for (var i = 0; i < n; i++) { var p = ((Math.random() * (d.length / 4)) | 0) * 4; d[p] = d[p] ^ 1; }
+                }
+                return r;
+            };
+        }
+    }
+
+    function fwHookWebGL(win, protect) {
+        [win.WebGLRenderingContext, win.WebGL2RenderingContext].forEach(function (GL) {
+            if (!GL || !GL.prototype || typeof GL.prototype.getParameter !== 'function') return;
+            var gp = GL.prototype.getParameter;
+            GL.prototype.getParameter = function (p) {
+                if (p === 37445) { logProfile('webgl.vendor', protect); if (protect) return 'Google Inc.'; }        // UNMASKED_VENDOR_WEBGL
+                if (p === 37446) { logProfile('webgl.renderer', protect); if (protect) return 'ANGLE (Generic, Generic, OpenGL)'; } // UNMASKED_RENDERER_WEBGL
+                return gp.apply(this, arguments);
+            };
+            PROFILE_APPLIED.push('webgl');
+        });
+    }
+
+    // Filter ICE candidates that expose private / host IPs, so WebRTC can't leak
+    // the machine's local addresses. Media/data channels still work.
+    function fwHookWebRTC(win, protect) {
+        var RTC = win.RTCPeerConnection || win.webkitRTCPeerConnection;
+        if (!RTC || !RTC.prototype || !protect) return;
+        var priv = /(\b10\.\d+\.\d+\.\d+|\b127\.\d+\.\d+\.\d+|\b192\.168\.\d+\.\d+|\b172\.(1[6-9]|2\d|3[01])\.\d+\.\d+|\b169\.254\.\d+\.\d+|[a-z0-9-]+\.local\b)/i;
+        function isPrivate(cand) { return cand && priv.test(cand.candidate || ''); }
+        function wrap(fn) {
+            return function (ev) {
+                if (ev && ev.candidate && isPrivate(ev.candidate)) { logProfile('webrtc.candidate', true); return; }
+                return fn.apply(this, arguments);
+            };
+        }
+        try {
+            var _add = RTC.prototype.addEventListener;
+            RTC.prototype.addEventListener = function (type, listener, opts) {
+                if (type === 'icecandidate' && typeof listener === 'function') return _add.call(this, type, wrap(listener), opts);
+                return _add.apply(this, arguments);
+            };
+            var desc = Object.getOwnPropertyDescriptor(RTC.prototype, 'onicecandidate');
+            if (desc && desc.set) {
+                Object.defineProperty(RTC.prototype, 'onicecandidate', {
+                    configurable: true, enumerable: desc.enumerable, get: desc.get,
+                    set: function (fn) { return desc.set.call(this, typeof fn === 'function' ? wrap(fn) : fn); }
+                });
+            }
+            PROFILE_APPLIED.push('webrtc');
+        } catch (e) { }
+    }
+
+    (function applyAntiProfiling() {
+        if (!PROFILE.enabled) return;
+        var protect = PROFILE.mode === 'protect';
+        var V = PROFILE.vectors;
+        var win = PAGE_WIN, nav = win.navigator, scr = win.screen;
+
+        function mark(name) { if (PROFILE_APPLIED.indexOf(name) === -1) PROFILE_APPLIED.push(name); }
+        // Install a logging getter that returns a spoofed value in protect mode.
+        function shield(obj, prop, vector, spoofed) {
+            if (!obj) return;
+            var orig; try { orig = obj[prop]; } catch (e) { }
+            try {
+                Object.defineProperty(obj, prop, {
+                    configurable: true,
+                    get: function () {
+                        logProfile(vector, protect);
+                        if (!protect) return orig;
+                        return typeof spoofed === 'function' ? spoofed() : spoofed;
+                    }
+                });
+                mark(vector);
+            } catch (e) { }
+        }
+
+        try {
+            if (V.languages) {
+                shield(nav, 'language', 'navigator.language', 'en-US');
+                shield(nav, 'languages', 'navigator.languages', function () { return ['en-US', 'en']; });
+            }
+            if (V.hardware) {
+                shield(nav, 'hardwareConcurrency', 'navigator.hardwareConcurrency', 4);
+                if ('deviceMemory' in nav) shield(nav, 'deviceMemory', 'navigator.deviceMemory', 8);
+            }
+            if (V.platform) {
+                shield(nav, 'platform', 'navigator.platform', 'Win32');
+                shield(nav, 'vendor', 'navigator.vendor', '');
+                if ('oscpu' in nav) shield(nav, 'oscpu', 'navigator.oscpu', 'Windows NT 10.0; Win64; x64');
+            }
+            if (V.screen && scr) {
+                shield(scr, 'width', 'screen.width', 1920);
+                shield(scr, 'height', 'screen.height', 1080);
+                shield(scr, 'availWidth', 'screen.availWidth', 1920);
+                shield(scr, 'availHeight', 'screen.availHeight', 1040);
+                shield(scr, 'colorDepth', 'screen.colorDepth', 24);
+                shield(scr, 'pixelDepth', 'screen.pixelDepth', 24);
+                shield(win, 'devicePixelRatio', 'window.devicePixelRatio', 1);
+            }
+            if (V.plugins) {
+                shield(nav, 'plugins', 'navigator.plugins',
+                    { length: 0, item: function () { return null; }, namedItem: function () { return null; }, refresh: function () { } });
+                shield(nav, 'mimeTypes', 'navigator.mimeTypes',
+                    { length: 0, item: function () { return null; }, namedItem: function () { return null; } });
+            }
+            if (V.timezone) {
+                try {
+                    var RO = win.Intl && win.Intl.DateTimeFormat && win.Intl.DateTimeFormat.prototype.resolvedOptions;
+                    if (RO) {
+                        win.Intl.DateTimeFormat.prototype.resolvedOptions = function () {
+                            var o = RO.apply(this, arguments);
+                            logProfile('timezone', protect);
+                            if (protect) { try { o.timeZone = 'UTC'; } catch (e) { } }
+                            return o;
+                        };
+                        mark('timezone');
+                    }
+                    if (protect) {
+                        var GTO = win.Date.prototype.getTimezoneOffset;
+                        win.Date.prototype.getTimezoneOffset = function () { logProfile('timezone', true); return 0; };
+                    }
+                } catch (e) { }
+            }
+            if (V.canvas) fwHookCanvas(win, protect);
+            if (V.webgl) fwHookWebGL(win, protect);
+            if (V.webrtc) fwHookWebRTC(win, protect);
+            // `extensions` vector is enforced in the request/resource firewall
+            // (profileBlocksExt) rather than here.
+            if (V.extensions) mark('extensions');
+        } catch (e) {
+            console.warn('[Traffic Firewall] anti-profiling failed', e);
+        }
+
+        if (PROFILE_APPLIED.length) {
+            console.log('[Traffic Firewall] anti-profiling (' + PROFILE.mode + ') shielded: ' + PROFILE_APPLIED.join(', '));
+        }
+    })();
+
+    /* --- Anti-profiling settings tab --- */
+    function renderProfile() {
+        var host = overlay && overlay.querySelector('#fw-body-profile');
+        if (!host) return;
+
+        var status = PROFILE.enabled
+            ? (PROFILE_APPLIED.length
+                ? '<span style="color:#8fe08f">● Active this page (' + PROFILE.mode + ') — ' + PROFILE_APPLIED.length + ' surface(s) shielded.</span>'
+                : '<span style="color:#ffd479">● Enabled — reload the page to shield fingerprinting surfaces.</span>')
+            : '<span style="color:#9aa4b2">○ Disabled.</span>';
+
+        var VECTORS = [
+            ['languages', 'Language & locale', 'navigator.language / languages'],
+            ['hardware', 'CPU cores & memory', 'hardwareConcurrency / deviceMemory'],
+            ['platform', 'Platform / vendor', 'navigator.platform / vendor / oscpu'],
+            ['screen', 'Screen & pixel ratio', 'screen.* / devicePixelRatio'],
+            ['plugins', 'Plugins & MIME types', 'navigator.plugins / mimeTypes → empty'],
+            ['canvas', 'Canvas fingerprint', 'toDataURL / getImageData → per-read noise'],
+            ['webgl', 'WebGL vendor / renderer', 'masked to a generic GPU'],
+            ['timezone', 'Time zone', 'Intl / getTimezoneOffset → UTC (may shift dates)'],
+            ['webrtc', 'WebRTC local-IP leak', 'drops private-IP ICE candidates'],
+            ['extensions', 'Extension probing', 'blocks chrome-/moz-extension:// requests']
+        ];
+        var boxes = VECTORS.map(function (v) {
+            var on = PROFILE.vectors[v[0]] ? ' checked' : '';
+            return '<label style="display:flex;flex-direction:row;align-items:flex-start;gap:8px;font-size:12px;color:#e6e6e6;padding:4px 0">' +
+                '<input type="checkbox" class="pf-v" data-v="' + v[0] + '"' + on + '>' +
+                '<span><b>' + escapeHtml(v[1]) + '</b> — <span style="color:#9aa4b2">' + escapeHtml(v[2]) + '</span></span></label>';
+        }).join('');
+
+        host.innerHTML =
+            '<p style="margin-top:0;color:#9aa4b2;font-size:12.5px">' +
+            'Detect and, in <b>Protect</b> mode, spoof the browser signals sites use to fingerprint you. ' +
+            'Applied at <code>document-start</code> before the page reads them — <b>reload to apply changes</b>. ' +
+            'In <b>Detect</b> mode nothing is changed; accesses are just logged to the Activity Log.' +
+            '</p>' +
+            '<div style="margin-bottom:12px;font-size:12.5px">' + status + '</div>' +
+            '<div class="fw-form-grid">' +
+            '<label>Protection' +
+            '<select class="fw-select" id="pf-enabled">' +
+            '<option value="on"' + (PROFILE.enabled ? ' selected' : '') + '>enabled</option>' +
+            '<option value="off"' + (!PROFILE.enabled ? ' selected' : '') + '>disabled</option>' +
+            '</select></label>' +
+            '<label>Mode' + sel('pf-mode', ['protect', 'detect'], PROFILE.mode) + '</label>' +
+            '</div>' +
+            '<div style="display:flex;gap:8px;margin-bottom:10px">' +
+            '<button class="fw-btn ghost mini" id="pf-all">Select all</button>' +
+            '<button class="fw-btn ghost mini" id="pf-none">Clear all</button>' +
+            '</div>' +
+            '<fieldset style="border:1px solid #2c313a;border-radius:6px;padding:8px 12px;margin:0 0 12px">' +
+            '<legend style="color:#9aa4b2;font-size:11.5px;padding:0 6px">Surfaces</legend>' + boxes +
+            '</fieldset>' +
+            '<div class="fw-row-actions">' +
+            '<button class="fw-btn primary" id="pf-save">Save anti-profiling</button>' +
+            '<span style="align-self:center;color:#6b7480;font-size:11.5px">Reload the page after saving to apply. Time-zone / UA spoofing can change site behaviour.</span>' +
+            '</div>';
+
+        host.querySelector('#pf-all').addEventListener('click', function () {
+            host.querySelectorAll('.pf-v').forEach(function (cb) { cb.checked = true; });
+        });
+        host.querySelector('#pf-none').addEventListener('click', function () {
+            host.querySelectorAll('.pf-v').forEach(function (cb) { cb.checked = false; });
+        });
+        host.querySelector('#pf-save').addEventListener('click', function () {
+            PROFILE.enabled = host.querySelector('#pf-enabled').value === 'on';
+            PROFILE.mode = host.querySelector('#pf-mode').value === 'detect' ? 'detect' : 'protect';
+            host.querySelectorAll('.pf-v').forEach(function (cb) { PROFILE.vectors[cb.dataset.v] = cb.checked; });
+            saveProfile(PROFILE);
+            var b = host.querySelector('#pf-save');
+            b.textContent = 'Saved ✓ — reload to apply';
+            setTimeout(function () { var x = host.querySelector('#pf-save'); if (x) x.textContent = 'Save anti-profiling'; }, 1600);
+        });
+    }
 })();

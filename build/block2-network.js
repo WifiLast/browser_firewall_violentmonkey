@@ -154,6 +154,10 @@
     // `canPrompt` is false for callers that cannot wait for an async modal
     // (sendBeacon, WebSocket) — those fall back to the page decision or allow.
     function classify(type, method, url, body, headerStr, canPrompt) {
+        // Anti-profiling: deny requests to extension URLs so pages can't probe
+        // for installed extensions via their web-accessible resources.
+        if (profileBlocksExt(url)) { logProfile('extension-probe', true); return { action: 'block', ruleName: 'anti-profiling (extension)' }; }
+
         // Explicit rules always win (except in disabled mode).
         if (MODE !== 'disabled') {
             var rule = findRule(type, method, url);

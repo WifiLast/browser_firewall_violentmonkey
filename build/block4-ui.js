@@ -16,19 +16,20 @@
         return [
             '#fw-overlay{position:fixed;inset:0;background:rgba(0,0,0,.55);z-index:2147483646;display:none;font-family:system-ui,Segoe UI,Arial,sans-serif}',
             '#fw-overlay.open{display:flex;align-items:center;justify-content:center}',
-            '#fw-modal{background:#1e2127;color:#e6e6e6;width:min(1100px,96vw);max-width:96vw;max-height:88vh;border-radius:10px;box-shadow:0 12px 48px rgba(0,0,0,.6);display:flex;flex-direction:column;overflow:hidden}',
+            '#fw-modal{background:#1e2127!important;color:#e6e6e6!important;width:min(1100px,96vw);max-width:96vw;max-height:88vh;border-radius:10px;box-shadow:0 12px 48px rgba(0,0,0,.6);display:flex;flex-direction:column;overflow:hidden}',
             '#fw-modal header{display:flex;align-items:center;gap:10px;padding:14px 18px;background:#12151a;border-bottom:1px solid #2c313a}',
             '#fw-modal header h2{margin:0;font-size:16px;font-weight:600;flex:1}',
             '#fw-modal header .fw-badge{font-size:11px;background:#2c313a;padding:2px 8px;border-radius:10px;color:#9aa4b2}',
             '.fw-tabs{display:flex;gap:4px;padding:8px 18px 0;background:#12151a}',
             '.fw-tab{padding:8px 14px;cursor:pointer;border:none;background:none;color:#9aa4b2;font-size:13px;border-bottom:2px solid transparent}',
             '.fw-tab.active{color:#fff;border-bottom-color:#4d8bf0}',
-            '.fw-body{padding:16px 18px;overflow-y:auto;overflow-x:hidden}',
-            '.fw-body table{width:100%;border-collapse:collapse;font-size:12.5px;table-layout:fixed}',
-            '.fw-body th,.fw-body td{text-align:left;padding:6px 8px;border-bottom:1px solid #2c313a;vertical-align:top;overflow-wrap:anywhere;word-break:break-word}',
-            '.fw-body th{color:#9aa4b2;font-weight:600;position:sticky;top:0;background:#1e2127}',
+            '.fw-body{padding:16px 18px;overflow-y:auto;overflow-x:hidden;background:#1e2127!important;color:#e6e6e6!important}',
+            '.fw-body table{width:100%;border-collapse:collapse;font-size:12.5px;table-layout:fixed;background:transparent!important}',
+            '.fw-body th,.fw-body td{text-align:left;padding:6px 8px;border-bottom:1px solid #2c313a;vertical-align:top;overflow-wrap:anywhere;word-break:break-word;background:transparent!important;color:#e6e6e6!important}',
+            '.fw-body th{color:#9aa4b2!important;font-weight:600;position:sticky;top:0;background:#1e2127!important}',
+            '.fw-body code{background:#12151a!important;color:#cfe1ff!important;padding:1px 4px;border-radius:3px}',
             '.fw-input,.fw-select{background:#12151a!important;color:#e6e6e6!important;border:1px solid #2c313a;border-radius:5px;padding:6px 8px;font-size:12.5px;width:100%;box-sizing:border-box}',
-            '.fw-select option{color:#000!important;background:#fff!important}',
+            '.fw-select option{color:#e6e6e6!important;background:#1e2127!important}',
             '.fw-btn{cursor:pointer;border:none;border-radius:5px;padding:7px 13px;font-size:12.5px;font-weight:600}',
             '.fw-btn.primary{background:#4d8bf0;color:#fff}',
             '.fw-btn.ghost{background:#2c313a;color:#e6e6e6}',
@@ -53,7 +54,7 @@
             '.fw-log tr.fw-log-row:hover{background:#232833}',
             '.fw-log .fw-url-short{color:#9aa4b2}',
             '.fw-log .fw-caret{display:inline-block;width:12px;color:#6b7480}',
-            '.fw-log tr.fw-log-detail>td{background:#171b21;color:#c7d0da;padding:8px 10px}',
+            '.fw-log tr.fw-log-detail>td{background:#171b21!important;color:#c7d0da!important;padding:8px 10px}',
             '.fw-log .fw-detail-url{word-break:break-all;color:#cfe1ff}',
             '.fw-log .fw-detail-body{white-space:pre-wrap;word-break:break-all;margin-top:6px;color:#9aa4b2;max-height:160px;overflow:auto}',
             '#fw-fab{position:fixed;bottom:16px;right:16px;z-index:2147483645;width:44px;height:44px;border-radius:50%;background:#4d8bf0;color:#fff;border:none;cursor:pointer;font-size:20px;box-shadow:0 4px 14px rgba(0,0,0,.4)}',
@@ -96,12 +97,14 @@
             '<button class="fw-tab" data-tab="tags">Watch Tags</button>' +
             '<button class="fw-tab" data-tab="js">JS Sources</button>' +
             '<button class="fw-tab" data-tab="harden">Hardening</button>' +
+            '<button class="fw-tab" data-tab="profile">Anti-Profiling</button>' +
             '<button class="fw-tab" data-tab="log">Activity Log</button>' +
             '</div>' +
             '<div class="fw-body" id="fw-body-rules"></div>' +
             '<div class="fw-body" id="fw-body-tags" style="display:none"></div>' +
             '<div class="fw-body" id="fw-body-js" style="display:none"></div>' +
             '<div class="fw-body" id="fw-body-harden" style="display:none"></div>' +
+            '<div class="fw-body" id="fw-body-profile" style="display:none"></div>' +
             '<div class="fw-body" id="fw-body-log" style="display:none"></div>' +
             '<div class="fw-foot">' +
             '<button class="fw-btn primary" id="fw-add">+ Add rule</button>' +
@@ -160,6 +163,7 @@
         renderTags();
         renderPolicy();
         renderHardening();
+        renderProfile();
         renderLog();
         logListeners.push(function () { if (activeTab === 'log') renderLog(); });
     }
@@ -173,11 +177,13 @@
         overlay.querySelector('#fw-body-tags').style.display = tab === 'tags' ? '' : 'none';
         overlay.querySelector('#fw-body-js').style.display = tab === 'js' ? '' : 'none';
         overlay.querySelector('#fw-body-harden').style.display = tab === 'harden' ? '' : 'none';
+        overlay.querySelector('#fw-body-profile').style.display = tab === 'profile' ? '' : 'none';
         overlay.querySelector('#fw-body-log').style.display = tab === 'log' ? '' : 'none';
         if (tab === 'log') renderLog();
         if (tab === 'tags') renderTags();
         if (tab === 'js') renderPolicy();
         if (tab === 'harden') renderHardening();
+        if (tab === 'profile') renderProfile();
     }
 
     function escapeHtml(s) {
