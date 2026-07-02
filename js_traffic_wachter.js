@@ -1551,6 +1551,7 @@
             '<button class="fw-btn primary" id="fw-add">+ Add rule</button>' +
             '<button class="fw-btn ghost" id="fw-export">Export</button>' +
             '<button class="fw-btn ghost" id="fw-import">Import</button>' +
+            '<button class="fw-btn danger" id="fw-clearrules">Clear all rules</button>' +
             '<label class="fw-mode-wrap" title="How a blocked request is delivered to the page">Blocked → ' +
                 '<select class="fw-select fw-mode-sel" id="fw-blockstyle">' +
                     '<option value="empty">Empty response (quiet)</option>' +
@@ -1582,6 +1583,13 @@
         overlay.querySelector('#fw-import').addEventListener('click', importRules);
         overlay.querySelector('#fw-clearlog').addEventListener('click', function () {
             LOG.length = 0; renderLog();
+        });
+        overlay.querySelector('#fw-clearrules').addEventListener('click', function () {
+            if (RULES.length && confirm('Delete all ' + RULES.length + ' rule(s)? This cannot be undone.')) {
+                RULES = [];
+                saveRules(RULES);
+                renderRules();
+            }
         });
 
         var modeSel = overlay.querySelector('#fw-mode');
