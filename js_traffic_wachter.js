@@ -493,12 +493,15 @@
     }
 
     // Persist a rule generated at runtime (learning mode / normal-mode "always").
-    function rememberRule(type, url, action, tag) {
-        var host = hostOf(url);
+    // patternOverride: when set, use this string as the pattern instead of the
+    // request's own host — used by the "Allow all *.example.com" dialog button.
+    function rememberRule(type, url, action, tag, patternOverride) {
+        var host = patternOverride || hostOf(url);
+        var displayName = patternOverride ? '*.' + patternOverride : host;
         var rule = {
             id: newId(),
             enabled: true,
-            name: '[' + tag + '] ' + host,
+            name: '[' + tag + '] ' + displayName,
             type: type,
             method: 'any',
             matchType: 'contains',
@@ -729,6 +732,14 @@
         return c;
     }
 
+    // Returns the parent domain if the host has a subdomain, or null.
+    // e.g. 'api.example.com' -> 'example.com', 'example.com' -> null
+    function rootDomainOf(host) {
+        var parts = host.split('.');
+        if (parts.length > 2) return parts.slice(1).join('.');
+        return null;
+    }
+
     // Asynchronous decision (fetch / XHR): may open the prompt modal.
     var pendingSig = {};   // sig -> Promise<action>, dedupes concurrent prompts
     function decideAsync(type, method, url, body, headerStr) {
@@ -743,7 +754,7 @@
             pendingSig[sig] = promptUser(c.ctx).then(function (choice) {
                 if (choice.all) pageDecision = choice.action;
                 askedSigs[sig] = choice.action;
-                rememberRule(type, url, choice.action, tag ? ('tag:' + tag) : 'asked');
+                rememberRule(type, url, choice.action, tag ? ('tag:' + tag) : 'asked', choice.subdomainPattern || null);
                 return choice.action;
             });
         }
@@ -818,8 +829,16 @@
         var allCb = mk('input', { id: 'fw-ask-all', type: 'checkbox' });
         var allLabel = mk('label', { cls: 'fw-ask-all' }, [allCb, ' Apply to all following requests on this page']);
 
+        // Detect subdomain so we can offer a wildcard-domain allow button.
+        var ctxHost = '';
+        try { ctxHost = new URL(String(ctx.url)).host; } catch (e) {}
+        var rootDomain = rootDomainOf(ctxHost);
+
         var blockBtn = mk('button', { cls: 'fw-btn danger', text: 'Block' });
         var allowBtn = mk('button', { cls: 'fw-btn primary', text: 'Allow' });
+        var allSubBtn = rootDomain
+            ? mk('button', { cls: 'fw-btn', text: 'Allow all *.' + rootDomain })
+            : null;
 
         var card = mk('div', { cls: 'fw-ask' }, [
             mk('div', { cls: 'fw-ask-h', text: '🔥 Traffic Firewall — allow this request?' }),
@@ -827,7 +846,7 @@
             meta,
             mk('div', { cls: 'fw-ask-url', text: String(ctx.url) }),
             allLabel,
-            mk('div', { cls: 'fw-ask-btns' }, [blockBtn, allowBtn])
+            mk('div', { cls: 'fw-ask-btns' }, [blockBtn, allowBtn, allSubBtn])
         ]);
         ov.appendChild(card);
         (document.body || document.documentElement).appendChild(ov);
@@ -837,8 +856,13 @@
             try { ov.remove(); } catch (e) { }
             done({ action: action, all: all });
         }
+        function finishSub(action) {
+            try { ov.remove(); } catch (e) { }
+            done({ action: action, all: false, subdomainPattern: rootDomain });
+        }
         allowBtn.addEventListener('click', function () { finish('allow'); });
         blockBtn.addEventListener('click', function () { finish('block'); });
+        if (allSubBtn) allSubBtn.addEventListener('click', function () { finishSub('allow'); });
     }
 
     /* -------------------------------------------------------------------- */

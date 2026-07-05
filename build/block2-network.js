@@ -214,6 +214,19 @@
         return c;
     }
 
+    // Returns all parent-domain levels for a host that has subdomains.
+    // e.g. 'a.b.example.com' -> ['b.example.com', 'example.com']
+    //      'api.example.com' -> ['example.com']
+    //      'example.com'     -> []
+    function getSubdomainLevels(host) {
+        var parts = host.split('.');
+        var levels = [];
+        for (var i = 1; i < parts.length - 1; i++) {
+            levels.push(parts.slice(i).join('.'));
+        }
+        return levels;
+    }
+
     // Asynchronous decision (fetch / XHR): may open the prompt modal.
     var pendingSig = {};   // sig -> Promise<action>, dedupes concurrent prompts
     function decideAsync(type, method, url, body, headerStr) {
@@ -228,7 +241,7 @@
             pendingSig[sig] = promptUser(c.ctx).then(function (choice) {
                 if (choice.all) pageDecision = choice.action;
                 askedSigs[sig] = choice.action;
-                rememberRule(type, url, choice.action, tag ? ('tag:' + tag) : 'asked');
+                rememberRule(type, url, choice.action, tag ? ('tag:' + tag) : 'asked', choice.subdomainPattern || null);
                 return choice.action;
             });
         }
@@ -303,8 +316,37 @@
         var allCb = mk('input', { id: 'fw-ask-all', type: 'checkbox' });
         var allLabel = mk('label', { cls: 'fw-ask-all' }, [allCb, ' Apply to all following requests on this page']);
 
+        // Detect subdomain levels to offer wildcard-domain allow options.
+        var ctxHost = '';
+        try { ctxHost = new URL(String(ctx.url)).host; } catch (e) {}
+        var subLevels = getSubdomainLevels(ctxHost);
+
         var blockBtn = mk('button', { cls: 'fw-btn danger', text: 'Block' });
         var allowBtn = mk('button', { cls: 'fw-btn primary', text: 'Allow' });
+
+        // Build subdomain UI: single button for one level, select+button for many.
+        var subdomainUI = null;
+        var getSubPattern = null;
+        if (subLevels.length === 1) {
+            var allSubBtn = mk('button', { cls: 'fw-btn', text: 'Allow all *.' + subLevels[0] });
+            getSubPattern = function () { return subLevels[0]; };
+            allSubBtn.addEventListener('click', function () { finishSub('allow'); });
+            subdomainUI = allSubBtn;
+        } else if (subLevels.length > 1) {
+            var subSel = mk('select', { cls: 'fw-input', style: 'flex:1;margin-right:6px' },
+                subLevels.map(function (lvl) {
+                    var opt = document.createElement('option');
+                    opt.__fwUI = true;
+                    opt.value = lvl;
+                    opt.textContent = '*.' + lvl;
+                    return opt;
+                })
+            );
+            var allSubBtn = mk('button', { cls: 'fw-btn', text: 'Allow all' });
+            getSubPattern = function () { return subSel.value; };
+            allSubBtn.addEventListener('click', function () { finishSub('allow'); });
+            subdomainUI = mk('div', { style: 'display:flex;align-items:center;margin-top:6px' }, [subSel, allSubBtn]);
+        }
 
         var card = mk('div', { cls: 'fw-ask' }, [
             mk('div', { cls: 'fw-ask-h', text: '🔥 Traffic Firewall — allow this request?' }),
@@ -312,7 +354,8 @@
             meta,
             mk('div', { cls: 'fw-ask-url', text: String(ctx.url) }),
             allLabel,
-            mk('div', { cls: 'fw-ask-btns' }, [blockBtn, allowBtn])
+            mk('div', { cls: 'fw-ask-btns' }, [blockBtn, allowBtn]),
+            subdomainUI
         ]);
         ov.appendChild(card);
         (document.body || document.documentElement).appendChild(ov);
@@ -321,6 +364,10 @@
             var all = !!allCb.checked;
             try { ov.remove(); } catch (e) { }
             done({ action: action, all: all });
+        }
+        function finishSub(action) {
+            try { ov.remove(); } catch (e) { }
+            done({ action: action, all: false, subdomainPattern: getSubPattern() });
         }
         allowBtn.addEventListener('click', function () { finish('allow'); });
         blockBtn.addEventListener('click', function () { finish('block'); });

@@ -476,12 +476,15 @@
     }
 
     // Persist a rule generated at runtime (learning mode / normal-mode "always").
-    function rememberRule(type, url, action, tag) {
-        var host = hostOf(url);
+    // patternOverride: when set, use this string as the pattern instead of the
+    // request's own host — used by the "Allow all *.example.com" dialog button.
+    function rememberRule(type, url, action, tag, patternOverride) {
+        var host = patternOverride || hostOf(url);
+        var displayName = patternOverride ? '*.' + patternOverride : host;
         var rule = {
             id: newId(),
             enabled: true,
-            name: '[' + tag + '] ' + host,
+            name: '[' + tag + '] ' + displayName,
             type: type,
             method: 'any',
             matchType: 'contains',
