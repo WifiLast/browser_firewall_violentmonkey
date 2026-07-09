@@ -446,6 +446,12 @@
             return;
         }
 
+        // Apply any query-parameter modifications defined in the matched rule.
+        if (outcome.rule && outcome.rule.params && outcome.rule.params.length) {
+            var fw = xhr.__fw || {};
+            var modUrl = applyParamRules(fw.url, outcome.rule.params);
+            if (modUrl !== String(fw.url)) xhrOpen.call(xhr, fw.method || 'GET', modUrl);
+        }
         xhrSend.apply(xhr, args);
     }
 
@@ -483,6 +489,14 @@
                     statusText: 'OK',
                     headers: { 'Content-Type': 'application/json' }
                 });
+            }
+            // Apply any query-parameter modifications defined in the matched rule.
+            if (outcome.rule && outcome.rule.params && outcome.rule.params.length) {
+                var modUrl = applyParamRules(url, outcome.rule.params);
+                if (modUrl !== url) {
+                    var newInput = (args[0] && typeof args[0] !== 'string') ? new Request(modUrl, args[0]) : modUrl;
+                    return nativeFetch.call(thisArg, newInput, args[1]);
+                }
             }
             return nativeFetch.apply(thisArg, args);
         }

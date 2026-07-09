@@ -461,6 +461,24 @@
         }
     }
 
+    // Apply query-parameter modifications defined in a rule's params list.
+    // Each entry: { name, op: 'remove'|'set'|'add', value }
+    function applyParamRules(url, params) {
+        if (!params || !params.length) return url;
+        try {
+            var u = new URL(String(url), location.href);
+            params.forEach(function (p) {
+                if (!p.name) return;
+                switch (p.op) {
+                    case 'remove': u.searchParams.delete(p.name); break;
+                    case 'set':    u.searchParams.set(p.name, p.value != null ? p.value : ''); break;
+                    case 'add':    u.searchParams.append(p.name, p.value != null ? p.value : ''); break;
+                }
+            });
+            return u.href;
+        } catch (e) { return url; }
+    }
+
     // Return the first enabled rule matching the given request, or null.
     function findRule(type, method, url) {
         for (var i = 0; i < RULES.length; i++) {

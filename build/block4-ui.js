@@ -603,6 +603,11 @@
             '<label class="full" id="f-replace-wrap"><span class="f-rep-label">Replacement response body</span><textarea class="fw-input" id="f-body" rows="4">' + escapeHtml(r.replaceBody || '') + '</textarea></label>' +
             '<label id="f-status-wrap">Replacement status<input class="fw-input" id="f-status" type="number" value="' + (r.replaceStatus || 200) + '"></label>' +
             '</div>' +
+            '<div style="margin:10px 0 4px;display:flex;justify-content:space-between;align-items:center">' +
+            '<span style="font-weight:600;font-size:13px">Parameter modifications</span>' +
+            '<button class="fw-btn ghost" id="f-params-add" type="button">+ Add param</button>' +
+            '</div>' +
+            '<div id="f-params-list"></div>' +
             '<div class="fw-row-actions">' +
             '<button class="fw-btn primary" id="f-save">Save rule</button>' +
             '<button class="fw-btn ghost" id="f-cancel">Cancel</button>' +
@@ -627,6 +632,68 @@
         host.querySelector('#f-type').addEventListener('change', toggleReplace);
         toggleReplace();
 
+        // --- Parameter modifications list ---
+        var paramsList = (r.params || []).map(function (p) {
+            return { name: p.name || '', op: p.op || 'remove', value: p.value || '' };
+        });
+
+        function renderParamRows() {
+            var list = host.querySelector('#f-params-list');
+            list.innerHTML = '';
+            paramsList.forEach(function (p, i) {
+                var row = document.createElement('div');
+                row.style.cssText = 'display:flex;gap:4px;margin-bottom:4px;align-items:center';
+
+                var nameIn = document.createElement('input');
+                nameIn.className = 'fw-input';
+                nameIn.style.flex = '1';
+                nameIn.placeholder = 'param name';
+                nameIn.value = p.name;
+                nameIn.addEventListener('input', function () { paramsList[i].name = nameIn.value; });
+
+                var opSel = document.createElement('select');
+                opSel.className = 'fw-select';
+                ['remove', 'set', 'add'].forEach(function (op) {
+                    var opt = document.createElement('option');
+                    opt.value = op; opt.textContent = op;
+                    if (op === p.op) opt.selected = true;
+                    opSel.appendChild(opt);
+                });
+
+                var valIn = document.createElement('input');
+                valIn.className = 'fw-input';
+                valIn.style.flex = '1';
+                valIn.placeholder = 'value';
+                valIn.value = p.value;
+                valIn.style.display = p.op === 'remove' ? 'none' : '';
+                valIn.addEventListener('input', function () { paramsList[i].value = valIn.value; });
+
+                opSel.addEventListener('change', function () {
+                    paramsList[i].op = opSel.value;
+                    valIn.style.display = opSel.value === 'remove' ? 'none' : '';
+                });
+
+                var delBtn = document.createElement('button');
+                delBtn.className = 'fw-btn danger';
+                delBtn.textContent = '✕';
+                delBtn.type = 'button';
+                delBtn.addEventListener('click', function () { paramsList.splice(i, 1); renderParamRows(); });
+
+                row.appendChild(nameIn);
+                row.appendChild(opSel);
+                row.appendChild(valIn);
+                row.appendChild(delBtn);
+                list.appendChild(row);
+            });
+        }
+
+        renderParamRows();
+        host.querySelector('#f-params-add').addEventListener('click', function () {
+            paramsList.push({ name: '', op: 'remove', value: '' });
+            renderParamRows();
+        });
+        // ------------------------------------
+
         host.querySelector('#f-cancel').addEventListener('click', renderRules);
         host.querySelector('#f-save').addEventListener('click', function () {
             r.name = host.querySelector('#f-name').value.trim();
@@ -637,6 +704,7 @@
             r.pattern = host.querySelector('#f-pattern').value;
             r.replaceBody = host.querySelector('#f-body').value;
             r.replaceStatus = parseInt(host.querySelector('#f-status').value, 10) || 200;
+            r.params = paramsList.filter(function (p) { return p.name.trim(); });
 
             if (!r.pattern && r.matchType !== 'regex') {
                 alert('Please enter a URL pattern.');
